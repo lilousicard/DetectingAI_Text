@@ -8,4 +8,7 @@
 *.jpeg
 *.json
 *.text
+*iml
+*.tex
 *.bib
+*.xml
