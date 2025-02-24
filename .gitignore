@@ -12,3 +12,6 @@
 *.tex
 *.bib
 *.xml
+
+/.venv
+
