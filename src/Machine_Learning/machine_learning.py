@@ -3,6 +3,8 @@ from sklearn.cluster import KMeans, AgglomerativeClustering, DBSCAN
 from sklearn.ensemble import IsolationForest
 from sklearn.mixture import GaussianMixture
 from scipy.spatial.distance import cdist
+from sklearn.neighbors import NearestNeighbors
+
 
 def perform_kmeans(data, num_clusters, seed=10, n_init=10, algorithm="lloyd"):
     # Extract vectors for clustering
@@ -109,7 +111,7 @@ def test_hierarchical(new_data, centroids):
     return assigned_clusters
 
 
-def run_DBSCAN(data, eps, min_samples):
+def perform_dbscan(data, eps=0.5, min_samples=5):
     # Extract vectors for clustering
     x = np.array(list(data.values()))
 
@@ -120,33 +122,73 @@ def run_DBSCAN(data, eps, min_samples):
     # Create a new dictionary to store results with cluster labels
     labeled_data = {key: {'vector': data[key], 'cluster': label} for key, label in zip(data.keys(), dbscan.labels_)}
 
+    return dbscan, labeled_data
+
+
+def assign_dbscan_clusters(dbscan, data, existing_data):
+    # Extract vectors
+    x_new = np.array(list(data.values()))
+    x_existing = np.array(list(existing_data.values()))  # Data used to train DBSCAN
+
+    # Use nearest neighbors to find the closest DBSCAN-labeled points
+    nn = NearestNeighbors(n_neighbors=1).fit(x_existing)
+    distances, indices = nn.kneighbors(x_new)
+
+    # Assign cluster labels based on nearest neighbor
+    new_labels = [dbscan.labels_[idx[0]] if dist[0] < dbscan.eps else -1 for idx, dist in zip(indices, distances)]
+
+    # Store the new data labels
+    labeled_data = {key: {'vector': data[key], 'cluster': label} for key, label in zip(data.keys(), new_labels)}
+
     return labeled_data
 
 
-def Gaussian_Mixture_Models(data, num_clusters):
+def perform_gmm(data, num_clusters, seed=10, n_init=10):
     # Extract vectors for clustering
     x = np.array(list(data.values()))
 
-    # Initialize and fit Gaussian Mixture Models
-    gmm = GaussianMixture(n_components=num_clusters)
+    # Initialize and fit Gaussian Mixture Model
+    gmm = GaussianMixture(n_components=num_clusters, random_state=seed, n_init=n_init)
     gmm.fit(x)
 
     # Create a new dictionary to store results with cluster labels
     labeled_data = {key: {'vector': data[key], 'cluster': label} for key, label in zip(data.keys(), gmm.predict(x))}
 
-    return labeled_data
+    return gmm, labeled_data
 
 
-def Isolation_Forest(data, num_clusters):
+def fit_gmm(gmm, data):
     # Extract vectors for clustering
     x = np.array(list(data.values()))
 
-    # Initialize and fit Isolation Forest
-    isolation_forest = IsolationForest(n_estimators=num_clusters)
-    isolation_forest.fit(x)
+    # Predict the cluster labels
+    labels = gmm.predict(x)
 
     # Create a new dictionary to store results with cluster labels
-    labeled_data = {key: {'vector': data[key], 'cluster': label} for key, label in
-                    zip(data.keys(), isolation_forest.predict(x))}
+    labeled_data = {key: {'vector': data[key], 'cluster': label} for key, label in zip(data.keys(), labels)}
+
+    return labeled_data
+
+
+def train_isolation_forest(human_data, seed=10, n_estimators=100, contamination=0.1):
+    # Extract vectors for training (only human-written text)
+    x_train = np.array(list(human_data.values()))
+
+    # Initialize and fit Isolation Forest
+    isolation_forest = IsolationForest(n_estimators=n_estimators, random_state=seed, contamination=contamination)
+    isolation_forest.fit(x_train)
+
+    return isolation_forest
+
+
+def test_isolation_forest(isolation_forest, data):
+    # Extract vectors for testing
+    x_test = np.array(list(data.values()))
+
+    # Predict anomaly scores (-1 for AI-generated text, 1 for human-written)
+    labels = isolation_forest.predict(x_test)
+
+    # Create a dictionary storing the results
+    labeled_data = {key: {'vector': data[key], 'is_human': label == 1} for key, label in zip(data.keys(), labels)}
 
     return labeled_data
